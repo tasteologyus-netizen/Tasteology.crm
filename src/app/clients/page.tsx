@@ -50,7 +50,7 @@ export default function ClientsPage() {
   }, [load]);
 
   return (
-    <div className="p-6 lg:p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <SetupBanner />
       <PageHeader
         title="Clients"

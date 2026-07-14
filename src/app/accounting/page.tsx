@@ -27,7 +27,7 @@ export default function AccountingPage() {
   }, [load]);
 
   return (
-    <div className="p-6 lg:p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <SetupBanner />
       <PageHeader
         title="Accounting"

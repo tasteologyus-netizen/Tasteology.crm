@@ -87,7 +87,7 @@ export default function Dashboard() {
   const recent = activity.slice(0, 8);
 
   return (
-    <div className="p-6 lg:p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <SetupBanner />
       <PageHeader
         title="Dashboard"
