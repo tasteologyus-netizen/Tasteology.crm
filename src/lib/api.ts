@@ -3,6 +3,7 @@ import type {
   Client,
   ClientWithRelations,
   Freelancer,
+  FreelancerPayment,
   Lead,
   LeadStatus,
   Payment,
@@ -118,14 +119,15 @@ export async function getClients(): Promise<ClientWithRelations[]> {
   if (!isSupabaseConfigured) return [];
   const { data, error } = await supabase
     .from("clients")
-    .select("*, payments(*), freelancer:freelancers(*)")
+    .select("*, payments(*), freelancer_payments(*), freelancer:freelancers(*)")
     .order("won_at", { ascending: false });
   if (error) throw error;
   const rows = (data ?? []) as unknown as ClientWithRelations[];
-  // keep payment milestones in a stable order
-  rows.forEach((c) =>
-    c.payments?.sort((a, b) => a.sort_order - b.sort_order)
-  );
+  // keep milestones in a stable order
+  rows.forEach((c) => {
+    c.payments?.sort((a, b) => a.sort_order - b.sort_order);
+    c.freelancer_payments?.sort((a, b) => a.sort_order - b.sort_order);
+  });
   return rows;
 }
 
@@ -256,4 +258,60 @@ export async function setPaymentPaid(
     .single();
   if (error) throw error;
   return data;
+}
+
+// ---------------------------------------------------------------------------
+// Freelancer payment milestones (pay a freelancer in installments)
+// ---------------------------------------------------------------------------
+export async function addFreelancerPayment(
+  clientId: string,
+  label: string,
+  amount: number,
+  sortOrder: number
+): Promise<FreelancerPayment> {
+  const { data, error } = await supabase
+    .from("freelancer_payments")
+    .insert({
+      client_id: clientId,
+      label,
+      amount,
+      sort_order: sortOrder,
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateFreelancerPaymentAmount(
+  id: string,
+  amount: number
+): Promise<void> {
+  const { error } = await supabase
+    .from("freelancer_payments")
+    .update({ amount })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function setFreelancerPaymentPaid(
+  id: string,
+  paid: boolean
+): Promise<void> {
+  const { error } = await supabase
+    .from("freelancer_payments")
+    .update({
+      is_paid: paid,
+      paid_at: paid ? new Date().toISOString() : null,
+    })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteFreelancerPayment(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("freelancer_payments")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
 }

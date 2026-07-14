@@ -143,6 +143,7 @@ const statusStyles: Record<string, string> = {
   manual: "bg-slate-100 text-slate-600 ring-slate-200",
   calendly: "bg-violet-50 text-violet-700 ring-violet-200",
   paid: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  partial: "bg-amber-50 text-amber-700 ring-amber-200",
   unpaid: "bg-slate-100 text-slate-600 ring-slate-200",
 };
 

@@ -12,6 +12,7 @@ import {
   Modal,
 } from "@/components/ui";
 import { formatMoney } from "@/lib/format";
+import { projectFinance } from "@/lib/finance";
 import {
   createFreelancer,
   deleteFreelancer,
@@ -99,13 +100,9 @@ export default function FreelancersPage() {
 
   const statsFor = (id: string) => {
     const assigned = clients.filter((c) => c.freelancer_id === id);
-    const owed = assigned.reduce(
-      (s, c) => s + Number(c.freelancer_payment ?? 0),
-      0
-    );
-    const paid = assigned
-      .filter((c) => c.freelancer_paid)
-      .reduce((s, c) => s + Number(c.freelancer_payment ?? 0), 0);
+    const fins = assigned.map(projectFinance);
+    const owed = fins.reduce((s, f) => s + f.freelancerPayment, 0);
+    const paid = fins.reduce((s, f) => s + f.freelancerPaid, 0);
     return { count: assigned.length, owed, paid };
   };
 

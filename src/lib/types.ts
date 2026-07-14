@@ -37,6 +37,17 @@ export interface Payment {
   created_at: string;
 }
 
+export interface FreelancerPayment {
+  id: string;
+  client_id: string;
+  label: string;
+  sort_order: number;
+  amount: number;
+  is_paid: boolean;
+  paid_at: string | null;
+  created_at: string;
+}
+
 export interface Client {
   id: string;
   lead_id: string | null;
@@ -56,5 +67,6 @@ export interface Client {
 
 export interface ClientWithRelations extends Client {
   payments: Payment[];
+  freelancer_payments: FreelancerPayment[];
   freelancer: Freelancer | null;
 }

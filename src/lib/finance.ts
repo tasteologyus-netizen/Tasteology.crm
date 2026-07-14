@@ -7,6 +7,7 @@ export interface ProjectFinance {
   outstanding: number;
   freelancerPayment: number;
   freelancerPaid: number;
+  freelancerOutstanding: number;
   profit: number; // total - freelancer payment
 }
 
@@ -28,7 +29,17 @@ export function projectFinance(client: ClientWithRelations): ProjectFinance {
     .filter((p) => p.is_paid)
     .reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
   const freelancerPayment = Number(client.freelancer_payment ?? 0);
-  const freelancerPaid = client.freelancer_paid ? freelancerPayment : 0;
+  const freelancerMilestones = client.freelancer_payments ?? [];
+  // Prefer milestone-based tracking; fall back to the legacy single toggle
+  // for any records created before freelancer milestones existed.
+  const freelancerPaid =
+    freelancerMilestones.length > 0
+      ? freelancerMilestones
+          .filter((p) => p.is_paid)
+          .reduce((sum, p) => sum + Number(p.amount ?? 0), 0)
+      : client.freelancer_paid
+      ? freelancerPayment
+      : 0;
   return {
     client,
     total,
@@ -36,6 +47,7 @@ export function projectFinance(client: ClientWithRelations): ProjectFinance {
     outstanding: Math.max(total - received, 0),
     freelancerPayment,
     freelancerPaid,
+    freelancerOutstanding: Math.max(freelancerPayment - freelancerPaid, 0),
     profit: total - freelancerPayment,
   };
 }

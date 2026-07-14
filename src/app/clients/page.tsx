@@ -16,13 +16,16 @@ import {
 import { formatDateTime, formatMoney } from "@/lib/format";
 import { projectFinance } from "@/lib/finance";
 import {
+  addFreelancerPayment,
   assignFreelancer,
   deleteClient,
+  deleteFreelancerPayment,
   getClients,
   getFreelancers,
-  setFreelancerPaid,
+  setFreelancerPaymentPaid,
   setPaymentPaid,
   updateClient,
+  updateFreelancerPaymentAmount,
   updatePaymentAmount,
 } from "@/lib/api";
 import type { ClientWithRelations, Freelancer } from "@/lib/types";
@@ -130,12 +133,17 @@ export default function ClientsPage() {
                     ) : (
                       <span className="text-amber-600">Unassigned</span>
                     )}
-                    {client.freelancer && (
-                      <Badge
-                        value={client.freelancer_paid ? "paid" : "unpaid"}
-                        label={client.freelancer_paid ? "paid" : "unpaid"}
-                      />
-                    )}
+                    {client.freelancer &&
+                      (() => {
+                        const status =
+                          fin.freelancerPayment > 0 &&
+                          fin.freelancerOutstanding <= 0
+                            ? "paid"
+                            : fin.freelancerPaid > 0
+                            ? "partial"
+                            : "unpaid";
+                        return <Badge value={status} label={status} />;
+                      })()}
                   </div>
                   <Button
                     variant="secondary"
@@ -183,6 +191,11 @@ function ClientDetail({
   const [freelancerPay, setFreelancerPay] = useState(
     String(client.freelancer_payment ?? 0)
   );
+  const [fpAmounts, setFpAmounts] = useState<Record<string, string>>(
+    Object.fromEntries(
+      (client.freelancer_payments ?? []).map((p) => [p.id, String(p.amount)])
+    )
+  );
 
   const fin = projectFinance(client);
 
@@ -216,8 +229,21 @@ function ClientDetail({
       )
     );
 
-  const toggleFreelancerPaid = (paid: boolean) =>
-    run(() => setFreelancerPaid(client.id, paid));
+  const saveFpAmount = (id: string) =>
+    run(() => updateFreelancerPaymentAmount(id, Number(fpAmounts[id] || 0)));
+
+  const toggleFpPaid = (id: string, paid: boolean) =>
+    run(() => setFreelancerPaymentPaid(id, paid));
+
+  const addFpMilestone = () => {
+    const next = (client.freelancer_payments?.length ?? 0) + 1;
+    run(() =>
+      addFreelancerPayment(client.id, `Payment ${next}`, 0, next)
+    );
+  };
+
+  const removeFpMilestone = (id: string) =>
+    run(() => deleteFreelancerPayment(id));
 
   const remove = () => {
     if (!confirm(`Delete client "${client.full_name}"? This cannot be undone.`))
@@ -370,28 +396,95 @@ function ClientDetail({
               />
             </Field>
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
+          <div className="mt-2">
             <Button variant="secondary" onClick={saveFreelancer} disabled={busy}>
               Save assignment
             </Button>
-            <div className="ml-auto flex items-center gap-2">
-              {client.freelancer_paid ? (
-                <span className="text-xs text-emerald-600">
-                  Paid {formatDateTime(client.freelancer_paid_at)}
-                </span>
-              ) : (
-                <span className="text-xs text-slate-400">Not paid yet</span>
-              )}
+          </div>
+
+          {/* Freelancer payment milestones */}
+          <div className="mt-4">
+            <div className="mb-2 flex items-center justify-between">
+              <h5 className="text-sm font-medium text-slate-700">
+                Freelancer payments
+              </h5>
               <Button
-                variant={client.freelancer_paid ? "secondary" : "success"}
-                onClick={() => toggleFreelancerPaid(!client.freelancer_paid)}
-                disabled={busy || !client.freelancer_id}
-                className="!py-1.5 !text-xs"
+                variant="ghost"
+                onClick={addFpMilestone}
+                disabled={busy}
+                className="!px-2 !text-xs"
               >
-                {client.freelancer_paid
-                  ? "Mark freelancer unpaid"
-                  : "Mark freelancer paid"}
+                + Add payment
               </Button>
+            </div>
+
+            {(client.freelancer_payments?.length ?? 0) === 0 ? (
+              <p className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-400">
+                No freelancer payments yet. Add one to pay in installments and
+                mark each as paid.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {client.freelancer_payments.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 p-3"
+                  >
+                    <span className="w-24 text-sm font-medium text-slate-700">
+                      {p.label}
+                    </span>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={fpAmounts[p.id] ?? ""}
+                      onChange={(e) =>
+                        setFpAmounts({ ...fpAmounts, [p.id]: e.target.value })
+                      }
+                      className="w-28"
+                    />
+                    <Button
+                      variant="ghost"
+                      onClick={() => saveFpAmount(p.id)}
+                      disabled={busy}
+                      className="!px-2 !text-xs"
+                    >
+                      Save
+                    </Button>
+                    <div className="ml-auto flex items-center gap-2">
+                      {p.is_paid ? (
+                        <span className="text-xs text-emerald-600">
+                          Paid {formatDateTime(p.paid_at)}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">Unpaid</span>
+                      )}
+                      <Button
+                        variant={p.is_paid ? "secondary" : "success"}
+                        onClick={() => toggleFpPaid(p.id, !p.is_paid)}
+                        disabled={busy}
+                        className="!py-1.5 !text-xs"
+                      >
+                        {p.is_paid ? "Mark unpaid" : "Mark paid"}
+                      </Button>
+                      <button
+                        onClick={() => removeFpMilestone(p.id)}
+                        disabled={busy}
+                        className="rounded-md px-1.5 py-1 text-xs text-red-600 hover:bg-red-50"
+                        aria-label="Delete payment"
+                        title="Delete payment"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-2 flex gap-4 text-sm text-slate-500">
+              <span>Paid to freelancer: {formatMoney(fin.freelancerPaid)}</span>
+              <span>Owed: {formatMoney(fin.freelancerOutstanding)}</span>
             </div>
           </div>
         </div>
