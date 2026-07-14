@@ -96,3 +96,19 @@ begin
     );
   end loop;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- Table privileges
+-- RLS decides which ROWS are visible, but the role still needs table-level
+-- GRANTs or Postgres raises "permission denied for table". Give signed-in
+-- users full access; the anon role only needs schema usage.
+-- ---------------------------------------------------------------------------
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+grant usage, select on all sequences in schema public to authenticated;
+
+-- Apply the same defaults to any tables/sequences created later.
+alter default privileges in schema public
+  grant select, insert, update, delete on tables to authenticated;
+alter default privileges in schema public
+  grant usage, select on sequences to authenticated;
