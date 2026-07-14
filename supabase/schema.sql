@@ -74,8 +74,10 @@ create index if not exists clients_freelancer_id_idx on public.clients(freelance
 
 -- ---------------------------------------------------------------------------
 -- Row Level Security
--- This is an internal tool without user auth, so we allow the anon key full
--- access. If you later add Supabase Auth, tighten these policies.
+-- Access requires a signed-in user (Supabase Auth). Any authenticated team
+-- member has full read/write access; anonymous requests are blocked.
+-- Create team logins in Supabase → Authentication → Users, or via the app's
+-- "Create account" screen.
 -- ---------------------------------------------------------------------------
 alter table public.freelancers enable row level security;
 alter table public.leads       enable row level security;
@@ -87,8 +89,9 @@ declare t text;
 begin
   foreach t in array array['freelancers','leads','clients','payments'] loop
     execute format('drop policy if exists "allow all" on public.%I;', t);
+    execute format('drop policy if exists "team access" on public.%I;', t);
     execute format(
-      'create policy "allow all" on public.%I for all to anon, authenticated using (true) with check (true);',
+      'create policy "team access" on public.%I for all to authenticated using (true) with check (true);',
       t
     );
   end loop;

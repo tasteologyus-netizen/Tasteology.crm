@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/lib/auth";
+import { isSupabaseConfigured } from "@/lib/supabaseClient";
 
 const nav = [
   { href: "/", label: "Dashboard", short: "Home", icon: "M3 12l9-9 9 9M5 10v10h5v-6h4v6h5V10" },
@@ -50,9 +52,27 @@ function Logo({ small }: { small?: boolean }) {
   );
 }
 
+function SignOutIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+    </svg>
+  );
+}
+
 export function Sidebar() {
   const pathname = usePathname();
   const current = nav.find((n) => isActive(pathname, n.href));
+  const { user, signOut } = useAuth();
 
   return (
     <>
@@ -80,17 +100,44 @@ export function Sidebar() {
             );
           })}
         </nav>
-        <div className="px-5 py-4 text-xs text-slate-400">Tasteology &amp; Co</div>
+        <div className="border-t border-slate-100 px-3 py-3">
+          {isSupabaseConfigured && user && (
+            <>
+              <p className="truncate px-2 pb-2 text-xs text-slate-400" title={user.email ?? ""}>
+                {user.email}
+              </p>
+              <button
+                onClick={() => signOut()}
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
+              >
+                <SignOutIcon />
+                Sign out
+              </button>
+            </>
+          )}
+        </div>
       </aside>
 
       {/* Mobile top app bar */}
       <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur lg:hidden">
         <Logo small />
-        {current && (
-          <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700">
-            {current.label}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {current && (
+            <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700">
+              {current.label}
+            </span>
+          )}
+          {isSupabaseConfigured && user && (
+            <button
+              onClick={() => signOut()}
+              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              aria-label="Sign out"
+              title={`Sign out (${user.email ?? ""})`}
+            >
+              <SignOutIcon />
+            </button>
+          )}
+        </div>
       </header>
 
       {/* Mobile bottom tab bar */}
