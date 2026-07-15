@@ -207,7 +207,7 @@ export default function FreelancersPage() {
     const projects = projectsFor(id);
     return {
       count: projects.length,
-      owed: projects.reduce((s, p) => s + p.fee, 0),
+      owed: projects.reduce((s, p) => s + p.outstanding, 0),
       paid: projects.reduce((s, p) => s + p.paid, 0),
     };
   };
@@ -299,8 +299,12 @@ export default function FreelancersPage() {
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-400">Owed</p>
-                    <p className="text-sm font-semibold text-slate-900">
+                    <p className="text-xs text-slate-400">Still owed</p>
+                    <p
+                      className={`text-sm font-semibold ${
+                        s.owed > 0 ? "text-amber-600" : "text-emerald-600"
+                      }`}
+                    >
                       {formatMoney(s.owed)}
                     </p>
                   </div>
@@ -330,8 +334,21 @@ export default function FreelancersPage() {
                             <p className="text-xs font-medium text-slate-600">
                               {proj.client.full_name}
                             </p>
-                            <p className="text-xs text-slate-400">
-                              Fee {formatMoney(proj.fee)}
+                            <p className="text-xs text-slate-500">
+                              <span
+                                className={
+                                  proj.outstanding > 0
+                                    ? "font-semibold text-amber-600"
+                                    : "font-semibold text-emerald-600"
+                                }
+                              >
+                                Fee {formatMoney(proj.outstanding)}
+                              </span>
+                              <span className="text-slate-400">
+                                {" "}
+                                left · {formatMoney(proj.paid)} paid of{" "}
+                                {formatMoney(proj.fee)}
+                              </span>
                             </p>
                           </div>
                           {proj.payments.length === 0 ? (
@@ -477,9 +494,10 @@ function FreelancerProfile({
     client: c,
     ...financeForFreelancer(c, freelancer.id),
   }));
-  const owed = perProject.reduce((s, p) => s + p.fee, 0);
+  const owed = perProject.reduce((s, p) => s + p.outstanding, 0);
   const received = perProject.reduce((s, p) => s + p.paid, 0);
-  const outstanding = Math.max(owed - received, 0);
+  const contracted = perProject.reduce((s, p) => s + p.fee, 0);
+  const outstanding = owed;
 
   const amountValue = (id: string, fallback: number) =>
     amounts[id] ?? String(fallback);
@@ -516,9 +534,13 @@ function FreelancerProfile({
 
         <div className="grid grid-cols-3 gap-3">
           <div className="rounded-lg border border-slate-200 p-3 text-center">
-            <p className="text-xs text-slate-400">Total owed</p>
-            <p className="text-lg font-semibold text-slate-900">
-              {formatMoney(owed)}
+            <p className="text-xs text-slate-400">Still owed</p>
+            <p
+              className={`text-lg font-semibold ${
+                outstanding > 0 ? "text-amber-600" : "text-emerald-600"
+              }`}
+            >
+              {formatMoney(outstanding)}
             </p>
           </div>
           <div className="rounded-lg border border-slate-200 p-3 text-center">
@@ -528,9 +550,9 @@ function FreelancerProfile({
             </p>
           </div>
           <div className="rounded-lg border border-slate-200 p-3 text-center">
-            <p className="text-xs text-slate-400">Outstanding</p>
-            <p className="text-lg font-semibold text-amber-600">
-              {formatMoney(outstanding)}
+            <p className="text-xs text-slate-400">Contracted</p>
+            <p className="text-lg font-semibold text-slate-900">
+              {formatMoney(contracted)}
             </p>
           </div>
         </div>
@@ -561,9 +583,17 @@ function FreelancerProfile({
                           {f.client.full_name}
                         </p>
                         <p className="text-xs text-slate-400">
-                          Fee {formatMoney(f.fee)} · received{" "}
-                          {formatMoney(f.paid)} · owed{" "}
-                          {formatMoney(f.outstanding)}
+                          <span
+                            className={
+                              f.outstanding > 0
+                                ? "font-semibold text-amber-600"
+                                : "font-semibold text-emerald-600"
+                            }
+                          >
+                            Fee {formatMoney(f.outstanding)}
+                          </span>{" "}
+                          left · {formatMoney(f.paid)} paid of{" "}
+                          {formatMoney(f.fee)}
                         </p>
                       </div>
                       <Badge value={status} label={status} />

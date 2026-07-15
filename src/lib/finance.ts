@@ -80,16 +80,33 @@ export function financeForFreelancer(
   const assignment = clientAssignments(client).find(
     (a) => a.freelancer_id === freelancerId
   );
-  const fee = Number(assignment?.fee ?? 0);
   const pays = paymentsForFreelancer(client, freelancerId);
+  const assignmentFee = Number(assignment?.fee ?? 0);
+
+  if (pays.length > 0) {
+    const contracted = pays.reduce(
+      (s, p) => s + Number(p.amount ?? 0),
+      0
+    );
+    const paid = pays
+      .filter((p) => p.is_paid)
+      .reduce((s, p) => s + Number(p.amount ?? 0), 0);
+    const outstanding = pays
+      .filter((p) => !p.is_paid)
+      .reduce((s, p) => s + Number(p.amount ?? 0), 0);
+    return {
+      // Contracted total from installments (falls back to assignment fee if all zero)
+      fee: contracted > 0 ? contracted : assignmentFee,
+      paid,
+      // Remaining fee after paid installments — this is what the UI should show shrinking
+      outstanding,
+      payments: pays,
+    };
+  }
+
+  const fee = assignmentFee;
   const paid =
-    pays.length > 0
-      ? pays
-          .filter((p) => p.is_paid)
-          .reduce((s, p) => s + Number(p.amount ?? 0), 0)
-      : client.freelancer_paid && client.freelancer_id === freelancerId
-      ? fee
-      : 0;
+    client.freelancer_paid && client.freelancer_id === freelancerId ? fee : 0;
   return {
     fee,
     paid,

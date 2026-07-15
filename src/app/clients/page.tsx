@@ -436,8 +436,17 @@ function ClientDetail({
                       </button>
                     </div>
                     <p className="mt-1 text-xs text-slate-400">
-                      Installments received {formatMoney(ff.paid)} · owed{" "}
-                      {formatMoney(ff.outstanding)}
+                      <span
+                        className={
+                          ff.outstanding > 0
+                            ? "font-semibold text-amber-600"
+                            : "font-semibold text-emerald-600"
+                        }
+                      >
+                        Fee {formatMoney(ff.outstanding)} left
+                      </span>
+                      {" · "}
+                      {formatMoney(ff.paid)} paid of {formatMoney(ff.fee)}
                     </p>
 
                     <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
