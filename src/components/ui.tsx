@@ -137,6 +137,7 @@ export function Modal({
 
 const statusStyles: Record<string, string> = {
   new: "bg-slate-100 text-slate-700 ring-slate-200",
+  pending: "bg-orange-50 text-orange-700 ring-orange-200",
   booked: "bg-blue-50 text-blue-700 ring-blue-200",
   quoted: "bg-amber-50 text-amber-700 ring-amber-200",
   won: "bg-emerald-50 text-emerald-700 ring-emerald-200",

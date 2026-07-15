@@ -1,7 +1,13 @@
 export type LeadSource = "manual" | "calendly";
-export type LeadStatus = "new" | "booked" | "quoted" | "won";
+export type LeadStatus = "new" | "pending" | "booked" | "quoted" | "won";
 
-export const LEAD_STATUSES: LeadStatus[] = ["new", "booked", "quoted", "won"];
+export const LEAD_STATUSES: LeadStatus[] = [
+  "new",
+  "pending",
+  "booked",
+  "quoted",
+  "won",
+];
 export const LEAD_SOURCES: LeadSource[] = ["manual", "calendly"];
 
 export interface Freelancer {
