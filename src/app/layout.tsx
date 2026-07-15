@@ -4,6 +4,7 @@ import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
 import { AuthProvider } from "@/lib/auth";
 import { AuthGate } from "@/components/AuthGate";
+import { MeetingReminders } from "@/components/MeetingReminders";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -46,6 +47,7 @@ export default function RootLayout({
                 {children}
               </main>
             </div>
+            <MeetingReminders />
           </AuthGate>
         </AuthProvider>
       </body>

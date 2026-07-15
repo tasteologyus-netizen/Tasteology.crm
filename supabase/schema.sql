@@ -31,9 +31,13 @@ create table if not exists public.leads (
   zoom_link     text,
   source        text not null default 'manual',
   status        text not null default 'new',
+  meeting_at    timestamptz,
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()
 );
+
+-- Add the meeting column to pre-existing leads tables.
+alter table public.leads add column if not exists meeting_at timestamptz;
 
 -- ---------------------------------------------------------------------------
 -- Clients (a Won lead => signed project)

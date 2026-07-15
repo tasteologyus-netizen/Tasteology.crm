@@ -16,6 +16,13 @@ import {
 } from "@/components/ui";
 import { formatDateTime } from "@/lib/format";
 import {
+  downloadIcs,
+  googleCalendarUrl,
+  isoToLocalInput,
+  localInputToIso,
+  type MeetingEvent,
+} from "@/lib/calendar";
+import {
   convertLeadToClient,
   createLead,
   deleteLead,
@@ -26,6 +33,17 @@ import {
 } from "@/lib/api";
 import { LEAD_SOURCES, LEAD_STATUSES, type Freelancer, type Lead, type LeadStatus } from "@/lib/types";
 
+function meetingEventFor(lead: Lead): MeetingEvent {
+  return {
+    title: `Meeting — ${lead.full_name}`,
+    startIso: lead.meeting_at!,
+    details: [lead.project_brief, lead.zoom_link && `Zoom: ${lead.zoom_link}`]
+      .filter(Boolean)
+      .join("\n"),
+    location: lead.zoom_link ?? "",
+  };
+}
+
 const emptyForm: LeadInput = {
   full_name: "",
   email: "",
@@ -34,6 +52,7 @@ const emptyForm: LeadInput = {
   zoom_link: "",
   source: "manual",
   status: "new",
+  meeting_at: null,
 };
 
 export default function LeadsPage() {
@@ -48,6 +67,7 @@ export default function LeadsPage() {
   const [saving, setSaving] = useState(false);
 
   const [convertLead, setConvertLead] = useState<Lead | null>(null);
+  const [bookLead, setBookLead] = useState<Lead | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -83,6 +103,7 @@ export default function LeadsPage() {
       zoom_link: lead.zoom_link ?? "",
       source: lead.source,
       status: lead.status,
+      meeting_at: lead.meeting_at,
     });
     setFormOpen(true);
   };
@@ -109,6 +130,10 @@ export default function LeadsPage() {
   const changeStatus = async (lead: Lead, status: LeadStatus) => {
     if (status === "won") {
       setConvertLead(lead);
+      return;
+    }
+    if (status === "booked") {
+      setBookLead(lead);
       return;
     }
     try {
@@ -180,6 +205,15 @@ export default function LeadsPage() {
                       <div className="font-medium text-slate-900">
                         {lead.full_name}
                       </div>
+                      {lead.meeting_at && (
+                        <div className="mt-0.5 flex items-center gap-1 text-xs font-medium text-brand-600">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="3" y="4" width="18" height="18" rx="2" />
+                            <path d="M16 2v4M8 2v4M3 10h18" strokeLinecap="round" />
+                          </svg>
+                          {formatDateTime(lead.meeting_at)}
+                        </div>
+                      )}
                       {lead.project_brief && (
                         <div className="mt-0.5 max-w-xs truncate text-xs text-slate-400">
                           {lead.project_brief}
@@ -215,6 +249,31 @@ export default function LeadsPage() {
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex justify-end gap-1">
+                        {lead.meeting_at && (
+                          <>
+                            <a
+                              href={googleCalendarUrl(meetingEventFor(lead))}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="rounded-md px-2 py-1 text-xs font-medium text-violet-600 hover:bg-violet-50"
+                              title="Add to Google Calendar"
+                            >
+                              Calendar
+                            </a>
+                            <button
+                              onClick={() =>
+                                downloadIcs(
+                                  meetingEventFor(lead),
+                                  `meeting-${lead.full_name}.ics`
+                                )
+                              }
+                              className="rounded-md px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                              title="Download .ics with a 1-hour reminder"
+                            >
+                              .ics
+                            </button>
+                          </>
+                        )}
                         {lead.zoom_link && (
                           <a
                             href={lead.zoom_link}
@@ -324,6 +383,15 @@ export default function LeadsPage() {
                 ))}
               </Select>
             </Field>
+            <Field label="Meeting date & time" hint="Used for the calendar & 1-hour reminder">
+              <Input
+                type="datetime-local"
+                value={isoToLocalInput(form.meeting_at)}
+                onChange={(e) =>
+                  setForm({ ...form, meeting_at: localInputToIso(e.target.value) })
+                }
+              />
+            </Field>
           </div>
           <Field label="Project brief">
             <Textarea
@@ -361,7 +429,100 @@ export default function LeadsPage() {
           }}
         />
       )}
+
+      {/* Book meeting */}
+      {bookLead && (
+        <BookingModal
+          lead={bookLead}
+          onClose={() => setBookLead(null)}
+          onDone={async () => {
+            setBookLead(null);
+            await load();
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function BookingModal({
+  lead,
+  onClose,
+  onDone,
+}: {
+  lead: Lead;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [meeting, setMeeting] = useState(isoToLocalInput(lead.meeting_at));
+  const [saving, setSaving] = useState(false);
+  const iso = localInputToIso(meeting);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await updateLead(lead.id, { status: "booked", meeting_at: iso });
+      onDone();
+    } catch (err) {
+      alert("Could not book meeting: " + (err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const previewLead: Lead = { ...lead, meeting_at: iso };
+
+  return (
+    <Modal open onClose={onClose} title={`Book meeting — ${lead.full_name}`}>
+      <form onSubmit={submit} className="space-y-4">
+        <div className="rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700">
+          Set the meeting date & time. You&apos;ll get a reminder 1 hour before,
+          and can add it to your calendar.
+        </div>
+        <Field label="Meeting date & time">
+          <Input
+            type="datetime-local"
+            value={meeting}
+            onChange={(e) => setMeeting(e.target.value)}
+            required
+            autoFocus
+          />
+        </Field>
+        {iso && (
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={googleCalendarUrl(meetingEventFor(previewLead))}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Add to Google Calendar
+            </a>
+            <button
+              type="button"
+              onClick={() =>
+                downloadIcs(
+                  meetingEventFor(previewLead),
+                  `meeting-${lead.full_name}.ics`
+                )
+              }
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Download .ics (1-hour reminder)
+            </button>
+          </div>
+        )}
+        <div className="flex justify-end gap-2 pt-1">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={saving}>
+            {saving ? "Saving…" : "Book meeting"}
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

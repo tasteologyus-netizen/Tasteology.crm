@@ -5,7 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { SetupBanner } from "@/components/SetupBanner";
 import { Badge, Card, EmptyState } from "@/components/ui";
-import { formatMoney, timeAgo } from "@/lib/format";
+import { formatDateTime, formatMoney, timeAgo } from "@/lib/format";
+import { downloadIcs, googleCalendarUrl, type MeetingEvent } from "@/lib/calendar";
 import { financeSummary } from "@/lib/finance";
 import { getClients, getFreelancers, getLeads } from "@/lib/api";
 import { LEAD_STATUSES, type ClientWithRelations, type Lead } from "@/lib/types";
@@ -49,6 +50,17 @@ export default function Dashboard() {
 
   const fin = financeSummary(clients);
   const activeLeads = leads.filter((l) => l.status !== "won");
+
+  const upcomingMeetings = leads
+    .filter(
+      (l) =>
+        l.meeting_at && new Date(l.meeting_at).getTime() > Date.now() - 3600000
+    )
+    .sort(
+      (a, b) =>
+        new Date(a.meeting_at!).getTime() - new Date(b.meeting_at!).getTime()
+    )
+    .slice(0, 5);
 
   const pipeline = LEAD_STATUSES.map((s) => ({
     status: s,
@@ -145,6 +157,75 @@ export default function Dashboard() {
               value={fin.totalFreelancerPaid}
             />
           </div>
+
+          {upcomingMeetings.length > 0 && (
+            <Card className="mt-6 p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-800">
+                  Upcoming meetings
+                </h3>
+                <Link
+                  href="/leads"
+                  className="text-xs font-medium text-brand-600 hover:underline"
+                >
+                  View leads
+                </Link>
+              </div>
+              <ul className="space-y-3">
+                {upcomingMeetings.map((lead) => {
+                  const ev: MeetingEvent = {
+                    title: `Meeting — ${lead.full_name}`,
+                    startIso: lead.meeting_at!,
+                    details: lead.project_brief ?? "",
+                    location: lead.zoom_link ?? "",
+                  };
+                  return (
+                    <li
+                      key={lead.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 p-3"
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">
+                          {lead.full_name}
+                        </p>
+                        <p className="text-xs text-brand-600">
+                          {formatDateTime(lead.meeting_at)}
+                        </p>
+                      </div>
+                      <div className="flex gap-1">
+                        {lead.zoom_link && (
+                          <a
+                            href={lead.zoom_link}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-md px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50"
+                          >
+                            Zoom
+                          </a>
+                        )}
+                        <a
+                          href={googleCalendarUrl(ev)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-md px-2 py-1 text-xs font-medium text-violet-600 hover:bg-violet-50"
+                        >
+                          Calendar
+                        </a>
+                        <button
+                          onClick={() =>
+                            downloadIcs(ev, `meeting-${lead.full_name}.ics`)
+                          }
+                          className="rounded-md px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                        >
+                          .ics
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </Card>
+          )}
 
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
             {/* Pipeline */}

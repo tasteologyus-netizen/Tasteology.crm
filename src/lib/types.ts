@@ -22,6 +22,7 @@ export interface Lead {
   zoom_link: string | null;
   source: LeadSource;
   status: LeadStatus;
+  meeting_at: string | null;
   created_at: string;
   updated_at: string;
 }

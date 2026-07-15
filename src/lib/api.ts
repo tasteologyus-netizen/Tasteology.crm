@@ -30,6 +30,7 @@ export interface LeadInput {
   zoom_link?: string | null;
   source: string;
   status: LeadStatus;
+  meeting_at?: string | null;
 }
 
 export async function createLead(input: LeadInput): Promise<Lead> {

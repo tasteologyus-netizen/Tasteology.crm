@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { SetupBanner } from "@/components/SetupBanner";
 import {
+  Badge,
   Button,
   Card,
   EmptyState,
@@ -11,7 +12,7 @@ import {
   Input,
   Modal,
 } from "@/components/ui";
-import { formatMoney } from "@/lib/format";
+import { formatDateTime, formatMoney } from "@/lib/format";
 import { projectFinance } from "@/lib/finance";
 import {
   createFreelancer,
@@ -38,6 +39,7 @@ export default function FreelancersPage() {
   const [editing, setEditing] = useState<Freelancer | null>(null);
   const [form, setForm] = useState<FreelancerInput>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [profile, setProfile] = useState<Freelancer | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -166,19 +168,27 @@ export default function FreelancersPage() {
                     </p>
                   </div>
                 </div>
-                <div className="mt-4 flex justify-end gap-1">
+                <div className="mt-4 flex items-center justify-between gap-1">
                   <button
-                    onClick={() => openEdit(f)}
-                    className="rounded-md px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                    onClick={() => setProfile(f)}
+                    className="rounded-md px-2 py-1 text-xs font-semibold text-brand-600 hover:bg-brand-50"
                   >
-                    Edit
+                    View profile
                   </button>
-                  <button
-                    onClick={() => remove(f)}
-                    className="rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
-                  >
-                    Delete
-                  </button>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => openEdit(f)}
+                      className="rounded-md px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => remove(f)}
+                      className="rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
               </Card>
             );
@@ -237,6 +247,138 @@ export default function FreelancersPage() {
           </div>
         </form>
       </Modal>
+
+      {profile && (
+        <FreelancerProfile
+          freelancer={profile}
+          clients={clients.filter((c) => c.freelancer_id === profile.id)}
+          onClose={() => setProfile(null)}
+        />
+      )}
     </div>
+  );
+}
+
+function FreelancerProfile({
+  freelancer,
+  clients,
+  onClose,
+}: {
+  freelancer: Freelancer;
+  clients: ClientWithRelations[];
+  onClose: () => void;
+}) {
+  const fins = clients.map(projectFinance);
+  const owed = fins.reduce((s, f) => s + f.freelancerPayment, 0);
+  const received = fins.reduce((s, f) => s + f.freelancerPaid, 0);
+  const outstanding = Math.max(owed - received, 0);
+
+  return (
+    <Modal open onClose={onClose} title={freelancer.name} wide>
+      <div className="space-y-5">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-2 rounded-lg bg-slate-50 p-4 text-sm sm:grid-cols-3">
+          <div>
+            <span className="block text-xs text-slate-400">Specialty</span>
+            <span className="text-slate-700">{freelancer.specialty || "—"}</span>
+          </div>
+          <div>
+            <span className="block text-xs text-slate-400">Email</span>
+            <span className="text-slate-700">{freelancer.email || "—"}</span>
+          </div>
+          <div>
+            <span className="block text-xs text-slate-400">Phone</span>
+            <span className="text-slate-700">{freelancer.phone || "—"}</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-lg border border-slate-200 p-3 text-center">
+            <p className="text-xs text-slate-400">Total owed</p>
+            <p className="text-lg font-semibold text-slate-900">
+              {formatMoney(owed)}
+            </p>
+          </div>
+          <div className="rounded-lg border border-slate-200 p-3 text-center">
+            <p className="text-xs text-slate-400">Received</p>
+            <p className="text-lg font-semibold text-emerald-600">
+              {formatMoney(received)}
+            </p>
+          </div>
+          <div className="rounded-lg border border-slate-200 p-3 text-center">
+            <p className="text-xs text-slate-400">Outstanding</p>
+            <p className="text-lg font-semibold text-amber-600">
+              {formatMoney(outstanding)}
+            </p>
+          </div>
+        </div>
+
+        <div>
+          <h4 className="mb-2 text-sm font-semibold text-slate-800">
+            Projects ({clients.length})
+          </h4>
+          {clients.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-slate-200 px-3 py-6 text-center text-sm text-slate-400">
+              Not assigned to any projects yet.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {fins.map((f) => {
+                const status =
+                  f.freelancerPayment > 0 && f.freelancerOutstanding <= 0
+                    ? "paid"
+                    : f.freelancerPaid > 0
+                    ? "partial"
+                    : "unpaid";
+                return (
+                  <div
+                    key={f.client.id}
+                    className="rounded-lg border border-slate-200 p-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-slate-900">
+                          {f.client.full_name}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          Fee {formatMoney(f.freelancerPayment)} · received{" "}
+                          {formatMoney(f.freelancerPaid)}
+                        </p>
+                      </div>
+                      <Badge value={status} label={status} />
+                    </div>
+                    {f.client.freelancer_payments.length > 0 && (
+                      <div className="mt-3 space-y-1.5 border-t border-slate-100 pt-3">
+                        {f.client.freelancer_payments.map((p) => (
+                          <div
+                            key={p.id}
+                            className="flex items-center justify-between text-sm"
+                          >
+                            <span className="text-slate-600">{p.label}</span>
+                            <span className="flex items-center gap-2">
+                              <span className="text-slate-700">
+                                {formatMoney(p.amount)}
+                              </span>
+                              {p.is_paid ? (
+                                <span className="text-xs text-emerald-600">
+                                  Paid {formatDateTime(p.paid_at)}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-slate-400">
+                                  Unpaid
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </Modal>
   );
 }
