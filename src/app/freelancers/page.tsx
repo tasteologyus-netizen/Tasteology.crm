@@ -209,6 +209,7 @@ export default function FreelancersPage() {
       count: projects.length,
       owed: projects.reduce((s, p) => s + p.outstanding, 0),
       paid: projects.reduce((s, p) => s + p.paid, 0),
+      contracted: projects.reduce((s, p) => s + p.fee, 0),
     };
   };
 
@@ -232,7 +233,7 @@ export default function FreelancersPage() {
       <SetupBanner />
       <PageHeader
         title="Freelancers"
-        subtitle="The people you assign signed projects to."
+        subtitle="See how much each freelancer has made in total, plus installments per project."
         action={<Button onClick={openNew}>+ Add freelancer</Button>}
       />
 
@@ -291,14 +292,27 @@ export default function FreelancersPage() {
                   {f.phone && <span>{f.phone}</span>}
                 </div>
 
-                <div className="mt-4 grid grid-cols-3 gap-2 border-t border-slate-100 pt-4 text-center">
-                  <div>
+                <div className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50/60 px-4 py-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-emerald-700/80">
+                    Total made
+                  </p>
+                  <p className="mt-0.5 text-2xl font-semibold text-emerald-700">
+                    {formatMoney(s.paid)}
+                  </p>
+                  <p className="mt-0.5 text-xs text-emerald-700/70">
+                    Sum of all paid installments across {s.count} project
+                    {s.count === 1 ? "" : "s"}
+                  </p>
+                </div>
+
+                <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                  <div className="rounded-lg border border-slate-100 px-2 py-2">
                     <p className="text-xs text-slate-400">Projects</p>
                     <p className="text-sm font-semibold text-slate-900">
                       {s.count}
                     </p>
                   </div>
-                  <div>
+                  <div className="rounded-lg border border-slate-100 px-2 py-2">
                     <p className="text-xs text-slate-400">Still owed</p>
                     <p
                       className={`text-sm font-semibold ${
@@ -308,10 +322,10 @@ export default function FreelancersPage() {
                       {formatMoney(s.owed)}
                     </p>
                   </div>
-                  <div>
-                    <p className="text-xs text-slate-400">Paid</p>
-                    <p className="text-sm font-semibold text-emerald-600">
-                      {formatMoney(s.paid)}
+                  <div className="rounded-lg border border-slate-100 px-2 py-2">
+                    <p className="text-xs text-slate-400">Contracted</p>
+                    <p className="text-sm font-semibold text-slate-900">
+                      {formatMoney(s.contracted)}
                     </p>
                   </div>
                 </div>
@@ -533,6 +547,12 @@ function FreelancerProfile({
         </div>
 
         <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-3 text-center sm:col-span-1">
+            <p className="text-xs text-emerald-700/80">Total made</p>
+            <p className="text-lg font-semibold text-emerald-700">
+              {formatMoney(received)}
+            </p>
+          </div>
           <div className="rounded-lg border border-slate-200 p-3 text-center">
             <p className="text-xs text-slate-400">Still owed</p>
             <p
@@ -541,12 +561,6 @@ function FreelancerProfile({
               }`}
             >
               {formatMoney(outstanding)}
-            </p>
-          </div>
-          <div className="rounded-lg border border-slate-200 p-3 text-center">
-            <p className="text-xs text-slate-400">Received</p>
-            <p className="text-lg font-semibold text-emerald-600">
-              {formatMoney(received)}
             </p>
           </div>
           <div className="rounded-lg border border-slate-200 p-3 text-center">
