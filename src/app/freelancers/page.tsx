@@ -15,11 +15,15 @@ import {
 import { formatDateTime, formatMoney } from "@/lib/format";
 import { projectFinance } from "@/lib/finance";
 import {
+  addFreelancerPayment,
   createFreelancer,
   deleteFreelancer,
+  deleteFreelancerPayment,
   getClients,
   getFreelancers,
+  setFreelancerPaymentPaid,
   updateFreelancer,
+  updateFreelancerPaymentAmount,
   type FreelancerInput,
 } from "@/lib/api";
 import type { ClientWithRelations, Freelancer } from "@/lib/types";
@@ -253,6 +257,7 @@ export default function FreelancersPage() {
           freelancer={profile}
           clients={clients.filter((c) => c.freelancer_id === profile.id)}
           onClose={() => setProfile(null)}
+          onChange={load}
         />
       )}
     </div>
@@ -263,15 +268,35 @@ function FreelancerProfile({
   freelancer,
   clients,
   onClose,
+  onChange,
 }: {
   freelancer: Freelancer;
   clients: ClientWithRelations[];
   onClose: () => void;
+  onChange: () => Promise<void>;
 }) {
+  const [busy, setBusy] = useState(false);
+  const [amounts, setAmounts] = useState<Record<string, string>>({});
+
   const fins = clients.map(projectFinance);
   const owed = fins.reduce((s, f) => s + f.freelancerPayment, 0);
   const received = fins.reduce((s, f) => s + f.freelancerPaid, 0);
   const outstanding = Math.max(owed - received, 0);
+
+  const amountValue = (id: string, fallback: number) =>
+    amounts[id] ?? String(fallback);
+
+  const run = async (fn: () => Promise<unknown>) => {
+    setBusy(true);
+    try {
+      await fn();
+      await onChange();
+    } catch (err) {
+      alert("Something went wrong: " + (err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <Modal open onClose={onClose} title={freelancer.name} wide>
@@ -329,6 +354,7 @@ function FreelancerProfile({
                     : f.freelancerPaid > 0
                     ? "partial"
                     : "unpaid";
+                const nextNo = f.client.freelancer_payments.length + 1;
                 return (
                   <div
                     key={f.client.id}
@@ -341,37 +367,106 @@ function FreelancerProfile({
                         </p>
                         <p className="text-xs text-slate-400">
                           Fee {formatMoney(f.freelancerPayment)} · received{" "}
-                          {formatMoney(f.freelancerPaid)}
+                          {formatMoney(f.freelancerPaid)} · owed{" "}
+                          {formatMoney(f.freelancerOutstanding)}
                         </p>
                       </div>
                       <Badge value={status} label={status} />
                     </div>
-                    {f.client.freelancer_payments.length > 0 && (
-                      <div className="mt-3 space-y-1.5 border-t border-slate-100 pt-3">
-                        {f.client.freelancer_payments.map((p) => (
-                          <div
-                            key={p.id}
-                            className="flex items-center justify-between text-sm"
+
+                    <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+                      {f.client.freelancer_payments.length === 0 && (
+                        <p className="text-xs text-slate-400">
+                          No payments recorded yet.
+                        </p>
+                      )}
+                      {f.client.freelancer_payments.map((p) => (
+                        <div
+                          key={p.id}
+                          className="flex flex-wrap items-center gap-2"
+                        >
+                          <span className="w-20 text-sm font-medium text-slate-700">
+                            {p.label}
+                          </span>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={amountValue(p.id, p.amount)}
+                            onChange={(e) =>
+                              setAmounts({ ...amounts, [p.id]: e.target.value })
+                            }
+                            className="w-28"
+                          />
+                          <Button
+                            variant="ghost"
+                            onClick={() =>
+                              run(() =>
+                                updateFreelancerPaymentAmount(
+                                  p.id,
+                                  Number(amountValue(p.id, p.amount) || 0)
+                                )
+                              )
+                            }
+                            disabled={busy}
+                            className="!px-2 !text-xs"
                           >
-                            <span className="text-slate-600">{p.label}</span>
-                            <span className="flex items-center gap-2">
-                              <span className="text-slate-700">
-                                {formatMoney(p.amount)}
+                            Save
+                          </Button>
+                          <div className="ml-auto flex items-center gap-2">
+                            {p.is_paid ? (
+                              <span className="text-xs text-emerald-600">
+                                Paid {formatDateTime(p.paid_at)}
                               </span>
-                              {p.is_paid ? (
-                                <span className="text-xs text-emerald-600">
-                                  Paid {formatDateTime(p.paid_at)}
-                                </span>
-                              ) : (
-                                <span className="text-xs text-slate-400">
-                                  Unpaid
-                                </span>
-                              )}
-                            </span>
+                            ) : (
+                              <span className="text-xs text-slate-400">
+                                Unpaid
+                              </span>
+                            )}
+                            <Button
+                              variant={p.is_paid ? "secondary" : "success"}
+                              onClick={() =>
+                                run(() =>
+                                  setFreelancerPaymentPaid(p.id, !p.is_paid)
+                                )
+                              }
+                              disabled={busy}
+                              className="!py-1.5 !text-xs"
+                            >
+                              {p.is_paid ? "Mark unpaid" : "Mark paid"}
+                            </Button>
+                            <button
+                              onClick={() =>
+                                run(() => deleteFreelancerPayment(p.id))
+                              }
+                              disabled={busy}
+                              className="rounded-md px-1.5 py-1 text-xs text-red-600 hover:bg-red-50"
+                              aria-label="Delete payment"
+                              title="Delete payment"
+                            >
+                              ✕
+                            </button>
                           </div>
-                        ))}
-                      </div>
-                    )}
+                        </div>
+                      ))}
+                      <Button
+                        variant="ghost"
+                        onClick={() =>
+                          run(() =>
+                            addFreelancerPayment(
+                              f.client.id,
+                              `Payment ${nextNo}`,
+                              0,
+                              nextNo
+                            )
+                          )
+                        }
+                        disabled={busy}
+                        className="!px-2 !text-xs"
+                      >
+                        + Add payment
+                      </Button>
+                    </div>
                   </div>
                 );
               })}
