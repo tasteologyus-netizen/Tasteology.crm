@@ -17,7 +17,6 @@ import { formatDateTime, formatMoney } from "@/lib/format";
 import {
   clientAssignments,
   financeForFreelancer,
-  freelancerDisplayNames,
   projectFinance,
 } from "@/lib/finance";
 import {
@@ -121,38 +120,125 @@ export default function ClientsPage() {
                   </div>
                 </div>
 
-                <div className="mt-4 flex flex-wrap gap-1.5">
-                  {client.payments.map((p) => (
-                    <span
-                      key={p.id}
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ring-1 ring-inset ${
-                        p.is_paid
-                          ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-                          : "bg-slate-50 text-slate-500 ring-slate-200"
-                      }`}
-                    >
-                      {p.is_paid ? "✓" : "•"} {p.label.replace(" Payment", "")}:{" "}
-                      {formatMoney(p.amount)}
-                    </span>
-                  ))}
+                {/* Client payments */}
+                <div className="mt-4 border-t border-slate-100 pt-4">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Client payments
+                  </p>
+                  {client.payments.length === 0 ? (
+                    <p className="text-xs text-slate-400">No client payments.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {client.payments.map((p) => (
+                        <div
+                          key={p.id}
+                          className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2 text-sm"
+                        >
+                          <span className="font-medium text-slate-700">
+                            {p.label}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-800">
+                              {formatMoney(p.amount)}
+                            </span>
+                            {p.is_paid ? (
+                              <Badge value="paid" label="paid" />
+                            ) : (
+                              <Badge value="unpaid" label="unpaid" />
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="mt-2 flex gap-3 text-xs text-slate-500">
+                    <span>Received {formatMoney(fin.received)}</span>
+                    <span>Left {formatMoney(fin.outstanding)}</span>
+                  </div>
                 </div>
 
-                <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4">
-                  <div className="text-sm">
-                    <span className="text-slate-400">Freelancers: </span>
-                    {assignments.length > 0 ? (
-                      <span className="font-medium text-slate-700">
-                        {freelancerDisplayNames(client)}
+                {/* Freelancer payments */}
+                <div className="mt-4 border-t border-slate-100 pt-4">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Freelancer payments
+                  </p>
+                  {assignments.length === 0 ? (
+                    <p className="text-xs text-amber-600">No freelancers assigned.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {assignments.map((a) => {
+                        const ff = financeForFreelancer(
+                          client,
+                          a.freelancer_id
+                        );
+                        return (
+                          <div key={a.id}>
+                            <div className="mb-1.5 flex items-center justify-between gap-2">
+                              <p className="text-sm font-medium text-slate-800">
+                                {a.freelancer?.name ?? "Freelancer"}
+                              </p>
+                              <p className="text-xs text-slate-400">
+                                <span
+                                  className={
+                                    ff.outstanding > 0
+                                      ? "font-semibold text-amber-600"
+                                      : "font-semibold text-emerald-600"
+                                  }
+                                >
+                                  {formatMoney(ff.outstanding)} left
+                                </span>
+                                {" · "}
+                                {formatMoney(ff.paid)} paid of{" "}
+                                {formatMoney(ff.fee)}
+                              </p>
+                            </div>
+                            {ff.payments.length === 0 ? (
+                              <p className="text-xs text-slate-400">
+                                No installments yet.
+                              </p>
+                            ) : (
+                              <div className="space-y-1.5">
+                                {ff.payments.map((p) => (
+                                  <div
+                                    key={p.id}
+                                    className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2 text-sm"
+                                  >
+                                    <span className="font-medium text-slate-700">
+                                      {p.label}
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-slate-800">
+                                        {formatMoney(p.amount)}
+                                      </span>
+                                      {p.is_paid ? (
+                                        <Badge value="paid" label="paid" />
+                                      ) : (
+                                        <Badge value="unpaid" label="unpaid" />
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {assignments.length > 0 && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                      <span>
+                        Freelancer total paid {formatMoney(fin.freelancerPaid)}
                       </span>
-                    ) : (
-                      <span className="text-amber-600">Unassigned</span>
-                    )}
-                    {assignments.length > 0 && (
-                      <span className="ml-1.5 inline-block align-middle">
-                        <Badge value={status} label={status} />
+                      <span>
+                        Still owed {formatMoney(fin.freelancerOutstanding)}
                       </span>
-                    )}
-                  </div>
+                      <Badge value={status} label={status} />
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-4 flex items-center justify-end border-t border-slate-100 pt-4">
                   <Button
                     variant="secondary"
                     onClick={() => setActive(client)}
