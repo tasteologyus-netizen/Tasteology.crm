@@ -13,7 +13,7 @@ import {
   Modal,
 } from "@/components/ui";
 import { formatDateTime, formatMoney } from "@/lib/format";
-import { projectFinance } from "@/lib/finance";
+import { financeForFreelancer, clientAssignments } from "@/lib/finance";
 import {
   addFreelancerPayment,
   createFreelancer,
@@ -105,10 +105,16 @@ export default function FreelancersPage() {
   };
 
   const statsFor = (id: string) => {
-    const assigned = clients.filter((c) => c.freelancer_id === id);
-    const fins = assigned.map(projectFinance);
-    const owed = fins.reduce((s, f) => s + f.freelancerPayment, 0);
-    const paid = fins.reduce((s, f) => s + f.freelancerPaid, 0);
+    const assigned = clients.filter((c) =>
+      clientAssignments(c).some((a) => a.freelancer_id === id)
+    );
+    let owed = 0;
+    let paid = 0;
+    for (const c of assigned) {
+      const f = financeForFreelancer(c, id);
+      owed += f.fee;
+      paid += f.paid;
+    }
     return { count: assigned.length, owed, paid };
   };
 
@@ -255,7 +261,9 @@ export default function FreelancersPage() {
       {profile && (
         <FreelancerProfile
           freelancer={profile}
-          clients={clients.filter((c) => c.freelancer_id === profile.id)}
+          clients={clients.filter((c) =>
+            clientAssignments(c).some((a) => a.freelancer_id === profile.id)
+          )}
           onClose={() => setProfile(null)}
           onChange={load}
         />
@@ -278,9 +286,12 @@ function FreelancerProfile({
   const [busy, setBusy] = useState(false);
   const [amounts, setAmounts] = useState<Record<string, string>>({});
 
-  const fins = clients.map(projectFinance);
-  const owed = fins.reduce((s, f) => s + f.freelancerPayment, 0);
-  const received = fins.reduce((s, f) => s + f.freelancerPaid, 0);
+  const perProject = clients.map((c) => ({
+    client: c,
+    ...financeForFreelancer(c, freelancer.id),
+  }));
+  const owed = perProject.reduce((s, p) => s + p.fee, 0);
+  const received = perProject.reduce((s, p) => s + p.paid, 0);
   const outstanding = Math.max(owed - received, 0);
 
   const amountValue = (id: string, fallback: number) =>
@@ -347,14 +358,22 @@ function FreelancerProfile({
             </p>
           ) : (
             <div className="space-y-3">
-              {fins.map((f) => {
+              {perProject.map((f) => {
                 const status =
-                  f.freelancerPayment > 0 && f.freelancerOutstanding <= 0
+                  f.fee > 0 && f.outstanding <= 0
                     ? "paid"
-                    : f.freelancerPaid > 0
+                    : f.paid > 0
                     ? "partial"
                     : "unpaid";
-                const nextNo = f.client.freelancer_payments.length + 1;
+                const nextNo = f.payments.length + 1;
+                const installmentLabel =
+                  nextNo === 1
+                    ? "First Payment"
+                    : nextNo === 2
+                    ? "Second Payment"
+                    : nextNo === 3
+                    ? "Third Payment"
+                    : `Payment ${nextNo}`;
                 return (
                   <div
                     key={f.client.id}
@@ -366,26 +385,30 @@ function FreelancerProfile({
                           {f.client.full_name}
                         </p>
                         <p className="text-xs text-slate-400">
-                          Fee {formatMoney(f.freelancerPayment)} · received{" "}
-                          {formatMoney(f.freelancerPaid)} · owed{" "}
-                          {formatMoney(f.freelancerOutstanding)}
+                          Fee {formatMoney(f.fee)} · received{" "}
+                          {formatMoney(f.paid)} · owed{" "}
+                          {formatMoney(f.outstanding)}
                         </p>
                       </div>
                       <Badge value={status} label={status} />
                     </div>
 
                     <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
-                      {f.client.freelancer_payments.length === 0 && (
+                      <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                        Payment installments
+                      </p>
+                      {f.payments.length === 0 && (
                         <p className="text-xs text-slate-400">
-                          No payments recorded yet.
+                          No payments recorded yet. Add First / Second / Third
+                          installments below.
                         </p>
                       )}
-                      {f.client.freelancer_payments.map((p) => (
+                      {f.payments.map((p) => (
                         <div
                           key={p.id}
                           className="flex flex-wrap items-center gap-2"
                         >
-                          <span className="w-20 text-sm font-medium text-slate-700">
+                          <span className="w-28 text-sm font-medium text-slate-700">
                             {p.label}
                           </span>
                           <Input
@@ -455,7 +478,8 @@ function FreelancerProfile({
                           run(() =>
                             addFreelancerPayment(
                               f.client.id,
-                              `Payment ${nextNo}`,
+                              freelancer.id,
+                              installmentLabel,
                               0,
                               nextNo
                             )
@@ -464,7 +488,7 @@ function FreelancerProfile({
                         disabled={busy}
                         className="!px-2 !text-xs"
                       >
-                        + Add payment
+                        + Add installment
                       </Button>
                     </div>
                   </div>

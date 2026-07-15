@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { SetupBanner } from "@/components/SetupBanner";
 import { Card, EmptyState } from "@/components/ui";
 import { formatMoney } from "@/lib/format";
-import { financeSummary, type FinanceSummary } from "@/lib/finance";
+import { financeSummary, freelancerDisplayNames, type FinanceSummary } from "@/lib/finance";
 import { getClients } from "@/lib/api";
 
 export default function AccountingPage() {
@@ -117,7 +117,7 @@ export default function AccountingPage() {
                             {p.client.full_name}
                           </div>
                           <div className="text-xs text-slate-400">
-                            {p.client.freelancer?.name ?? "Unassigned"}
+                            {freelancerDisplayNames(p.client)}
                           </div>
                         </td>
                         <td className="px-5 py-3 text-right text-slate-700">
@@ -133,12 +133,20 @@ export default function AccountingPage() {
                           {formatMoney(p.freelancerPayment)}
                           <span
                             className={`ml-1 text-xs ${
-                              p.client.freelancer_paid
+                              p.freelancerOutstanding <= 0 &&
+                              p.freelancerPayment > 0
                                 ? "text-emerald-500"
+                                : p.freelancerPaid > 0
+                                ? "text-amber-500"
                                 : "text-slate-400"
                             }`}
                           >
-                            {p.client.freelancer_paid ? "paid" : "unpaid"}
+                            {p.freelancerOutstanding <= 0 &&
+                            p.freelancerPayment > 0
+                              ? "paid"
+                              : p.freelancerPaid > 0
+                              ? "partial"
+                              : "unpaid"}
                           </span>
                         </td>
                         <td className="px-5 py-3 text-right font-semibold text-slate-900">

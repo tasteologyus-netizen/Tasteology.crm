@@ -77,20 +77,43 @@ create index if not exists payments_client_id_idx on public.payments(client_id);
 create index if not exists clients_freelancer_id_idx on public.clients(freelancer_id);
 
 -- ---------------------------------------------------------------------------
+-- Client ↔ Freelancer assignments (a project can have 2+ freelancers)
+-- ---------------------------------------------------------------------------
+create table if not exists public.client_freelancers (
+  id             uuid primary key default gen_random_uuid(),
+  client_id      uuid not null references public.clients(id) on delete cascade,
+  freelancer_id  uuid not null references public.freelancers(id) on delete cascade,
+  fee            numeric(12,2) not null default 0,
+  created_at     timestamptz not null default now(),
+  unique (client_id, freelancer_id)
+);
+
+create index if not exists client_freelancers_client_id_idx
+  on public.client_freelancers(client_id);
+create index if not exists client_freelancers_freelancer_id_idx
+  on public.client_freelancers(freelancer_id);
+
+-- ---------------------------------------------------------------------------
 -- Freelancer payment milestones (pay a freelancer in installments per project)
 -- ---------------------------------------------------------------------------
 create table if not exists public.freelancer_payments (
-  id          uuid primary key default gen_random_uuid(),
-  client_id   uuid not null references public.clients(id) on delete cascade,
-  label       text not null,
-  sort_order  int  not null default 0,
-  amount      numeric(12,2) not null default 0,
-  is_paid     boolean not null default false,
-  paid_at     timestamptz,
-  created_at  timestamptz not null default now()
+  id             uuid primary key default gen_random_uuid(),
+  client_id      uuid not null references public.clients(id) on delete cascade,
+  freelancer_id  uuid references public.freelancers(id) on delete set null,
+  label          text not null,
+  sort_order     int  not null default 0,
+  amount         numeric(12,2) not null default 0,
+  is_paid        boolean not null default false,
+  paid_at        timestamptz,
+  created_at     timestamptz not null default now()
 );
 
 create index if not exists freelancer_payments_client_id_idx on public.freelancer_payments(client_id);
+create index if not exists freelancer_payments_freelancer_id_idx on public.freelancer_payments(freelancer_id);
+
+-- For databases created from older schema.sql versions:
+alter table public.freelancer_payments
+  add column if not exists freelancer_id uuid references public.freelancers(id) on delete set null;
 
 -- ---------------------------------------------------------------------------
 -- Row Level Security
@@ -104,11 +127,12 @@ alter table public.leads              enable row level security;
 alter table public.clients            enable row level security;
 alter table public.payments           enable row level security;
 alter table public.freelancer_payments enable row level security;
+alter table public.client_freelancers  enable row level security;
 
 do $$
 declare t text;
 begin
-  foreach t in array array['freelancers','leads','clients','payments','freelancer_payments'] loop
+  foreach t in array array['freelancers','leads','clients','payments','freelancer_payments','client_freelancers'] loop
     execute format('drop policy if exists "allow all" on public.%I;', t);
     execute format('drop policy if exists "team access" on public.%I;', t);
     execute format(

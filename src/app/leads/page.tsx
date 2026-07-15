@@ -565,8 +565,14 @@ function ConvertModal({
   const [first, setFirst] = useState("");
   const [second, setSecond] = useState("");
   const [third, setThird] = useState("");
-  const [freelancerId, setFreelancerId] = useState("");
-  const [freelancerPay, setFreelancerPay] = useState("");
+  const [assignments, setAssignments] = useState<
+    {
+      freelancer_id: string;
+      first: string;
+      second: string;
+      third: string;
+    }[]
+  >([{ freelancer_id: "", first: "", second: "", third: "" }]);
   const [saving, setSaving] = useState(false);
 
   const num = (v: string) => Number(v || 0);
@@ -581,8 +587,15 @@ function ConvertModal({
         first_payment: num(first),
         second_payment: num(second),
         third_payment: num(third),
-        freelancer_id: freelancerId || null,
-        freelancer_payment: num(freelancerPay),
+        freelancers: assignments
+          .filter((a) => a.freelancer_id)
+          .map((a) => ({
+            freelancer_id: a.freelancer_id,
+            first_payment: num(a.first),
+            second_payment: num(a.second),
+            third_payment: num(a.third),
+            fee: num(a.first) + num(a.second) + num(a.third),
+          })),
       });
       onDone();
     } catch (err) {
@@ -591,6 +604,10 @@ function ConvertModal({
       setSaving(false);
     }
   };
+
+  const usedIds = new Set(
+    assignments.map((a) => a.freelancer_id).filter(Boolean)
+  );
 
   return (
     <Modal open onClose={onClose} title={`Win project — ${lead.full_name}`} wide>
@@ -650,31 +667,127 @@ function ConvertModal({
             later on the client page.
           </p>
         )}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Assign freelancer (optional)">
-            <Select
-              value={freelancerId}
-              onChange={(e) => setFreelancerId(e.target.value)}
-            >
-              <option value="">— Unassigned —</option>
-              {freelancers.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Freelancer payment (USD)">
-            <Input
-              type="number"
-              min="0"
-              step="0.01"
-              value={freelancerPay}
-              onChange={(e) => setFreelancerPay(e.target.value)}
-              placeholder="0.00"
-            />
-          </Field>
+
+        <div>
+          <h4 className="mb-2 text-sm font-semibold text-slate-800">
+            Assign freelancers (optional)
+          </h4>
+          <p className="mb-2 text-xs text-slate-400">
+            Assign one or more freelancers. Set their fee as First / Second /
+            Third installments (same as client payments).
+          </p>
+          <div className="space-y-3">
+            {assignments.map((row, idx) => {
+              const feeSum = num(row.first) + num(row.second) + num(row.third);
+              return (
+                <div
+                  key={idx}
+                  className="space-y-2 rounded-lg border border-slate-200 p-3"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Select
+                      value={row.freelancer_id}
+                      onChange={(e) => {
+                        const next = [...assignments];
+                        next[idx] = {
+                          ...next[idx],
+                          freelancer_id: e.target.value,
+                        };
+                        setAssignments(next);
+                      }}
+                      className="min-w-[10rem] flex-1"
+                    >
+                      <option value="">— Choose freelancer —</option>
+                      {freelancers.map((f) => (
+                        <option
+                          key={f.id}
+                          value={f.id}
+                          disabled={
+                            usedIds.has(f.id) && f.id !== row.freelancer_id
+                          }
+                        >
+                          {f.name}
+                        </option>
+                      ))}
+                    </Select>
+                    <span className="text-xs text-slate-400">
+                      Fee total {feeSum.toFixed(2)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAssignments(
+                          assignments.filter((_, i) => i !== idx)
+                        )
+                      }
+                      disabled={assignments.length === 1}
+                      className="rounded-md px-2 py-2 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-40"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <Field label="First payment">
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={row.first}
+                        onChange={(e) => {
+                          const next = [...assignments];
+                          next[idx] = { ...next[idx], first: e.target.value };
+                          setAssignments(next);
+                        }}
+                        placeholder="0.00"
+                      />
+                    </Field>
+                    <Field label="Second payment">
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={row.second}
+                        onChange={(e) => {
+                          const next = [...assignments];
+                          next[idx] = { ...next[idx], second: e.target.value };
+                          setAssignments(next);
+                        }}
+                        placeholder="0.00"
+                      />
+                    </Field>
+                    <Field label="Third payment">
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={row.third}
+                        onChange={(e) => {
+                          const next = [...assignments];
+                          next[idx] = { ...next[idx], third: e.target.value };
+                          setAssignments(next);
+                        }}
+                        placeholder="0.00"
+                      />
+                    </Field>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              setAssignments([
+                ...assignments,
+                { freelancer_id: "", first: "", second: "", third: "" },
+              ])
+            }
+            className="mt-2 text-xs font-medium text-brand-600 hover:underline"
+          >
+            + Add another freelancer
+          </button>
         </div>
+
         <div className="flex justify-end gap-2 pt-1">
           <Button type="button" variant="secondary" onClick={onClose}>
             Cancel

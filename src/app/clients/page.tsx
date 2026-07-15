@@ -14,14 +14,25 @@ import {
   Select,
 } from "@/components/ui";
 import { formatDateTime, formatMoney } from "@/lib/format";
-import { projectFinance } from "@/lib/finance";
 import {
-  assignFreelancer,
+  clientAssignments,
+  financeForFreelancer,
+  freelancerDisplayNames,
+  projectFinance,
+} from "@/lib/finance";
+import {
+  addClientFreelancer,
+  addFreelancerPayment,
   deleteClient,
+  deleteFreelancerPayment,
   getClients,
   getFreelancers,
+  removeClientFreelancer,
+  setFreelancerPaymentPaid,
   setPaymentPaid,
   updateClient,
+  updateClientFreelancerFee,
+  updateFreelancerPaymentAmount,
   updatePaymentAmount,
 } from "@/lib/api";
 import type { ClientWithRelations, Freelancer } from "@/lib/types";
@@ -67,10 +78,17 @@ export default function ClientsPage() {
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {clients.map((client) => {
             const fin = projectFinance(client);
+            const assignments = clientAssignments(client);
             const pct =
               fin.total > 0
                 ? Math.min(100, Math.round((fin.received / fin.total) * 100))
                 : 0;
+            const status =
+              fin.freelancerPayment > 0 && fin.freelancerOutstanding <= 0
+                ? "paid"
+                : fin.freelancerPaid > 0
+                ? "partial"
+                : "unpaid";
             return (
               <Card key={client.id} className="p-5">
                 <div className="flex items-start justify-between gap-3">
@@ -121,25 +139,19 @@ export default function ClientsPage() {
 
                 <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4">
                   <div className="text-sm">
-                    <span className="text-slate-400">Freelancer: </span>
-                    {client.freelancer ? (
+                    <span className="text-slate-400">Freelancers: </span>
+                    {assignments.length > 0 ? (
                       <span className="font-medium text-slate-700">
-                        {client.freelancer.name}
+                        {freelancerDisplayNames(client)}
                       </span>
                     ) : (
                       <span className="text-amber-600">Unassigned</span>
                     )}
-                    {client.freelancer &&
-                      (() => {
-                        const status =
-                          fin.freelancerPayment > 0 &&
-                          fin.freelancerOutstanding <= 0
-                            ? "paid"
-                            : fin.freelancerPaid > 0
-                            ? "partial"
-                            : "unpaid";
-                        return <Badge value={status} label={status} />;
-                      })()}
+                    {assignments.length > 0 && (
+                      <span className="ml-1.5 inline-block align-middle">
+                        <Badge value={status} label={status} />
+                      </span>
+                    )}
                   </div>
                   <Button
                     variant="secondary"
@@ -183,12 +195,19 @@ function ClientDetail({
   const [amounts, setAmounts] = useState<Record<string, string>>(
     Object.fromEntries(client.payments.map((p) => [p.id, String(p.amount)]))
   );
-  const [freelancerId, setFreelancerId] = useState(client.freelancer_id ?? "");
-  const [freelancerPay, setFreelancerPay] = useState(
-    String(client.freelancer_payment ?? 0)
-  );
+  const [addFreelancerId, setAddFreelancerId] = useState("");
+  const [addFirst, setAddFirst] = useState("");
+  const [addSecond, setAddSecond] = useState("");
+  const [addThird, setAddThird] = useState("");
+  const [feeEdits, setFeeEdits] = useState<Record<string, string>>({});
+  const [fpAmounts, setFpAmounts] = useState<Record<string, string>>({});
 
   const fin = projectFinance(client);
+  const assignments = clientAssignments(client);
+  const assignedIds = new Set(assignments.map((a) => a.freelancer_id));
+  const available = freelancers.filter((f) => !assignedIds.has(f.id));
+  const addFeeTotal =
+    Number(addFirst || 0) + Number(addSecond || 0) + Number(addThird || 0);
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -211,14 +230,20 @@ function ClientDetail({
   const togglePaid = (id: string, paid: boolean) =>
     run(() => setPaymentPaid(id, paid).then(() => undefined));
 
-  const saveFreelancer = () =>
-    run(() =>
-      assignFreelancer(
-        client.id,
-        freelancerId || null,
-        Number(freelancerPay || 0)
-      )
-    );
+  const addAssignment = () => {
+    if (!addFreelancerId) return;
+    run(async () => {
+      await addClientFreelancer(client.id, addFreelancerId, addFeeTotal, {
+        first_payment: Number(addFirst || 0),
+        second_payment: Number(addSecond || 0),
+        third_payment: Number(addThird || 0),
+      });
+      setAddFreelancerId("");
+      setAddFirst("");
+      setAddSecond("");
+      setAddThird("");
+    });
+  };
 
   const remove = () => {
     if (!confirm(`Delete client "${client.full_name}"? This cannot be undone.`))
@@ -232,7 +257,6 @@ function ClientDetail({
   return (
     <Modal open onClose={onClose} title={client.full_name} wide>
       <div className="space-y-6">
-        {/* Contact */}
         <div className="grid grid-cols-2 gap-x-6 gap-y-2 rounded-lg bg-slate-50 p-4 text-sm sm:grid-cols-3">
           <Info label="Email" value={client.email} />
           <Info label="Phone" value={client.phone} />
@@ -258,7 +282,6 @@ function ClientDetail({
           )}
         </div>
 
-        {/* Total */}
         <div>
           <h4 className="mb-2 text-sm font-semibold text-slate-800">
             Project total
@@ -284,7 +307,6 @@ function ClientDetail({
           </div>
         </div>
 
-        {/* Payments */}
         <div>
           <h4 className="mb-2 text-sm font-semibold text-slate-800">
             Payment milestones
@@ -342,54 +364,255 @@ function ClientDetail({
           </div>
         </div>
 
-        {/* Freelancer */}
         <div>
           <h4 className="mb-2 text-sm font-semibold text-slate-800">
-            Freelancer assignment
+            Freelancer assignments
           </h4>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <p className="mb-3 text-xs text-slate-400">
+            Assign one or more freelancers and pay them in First / Second /
+            Third installments — same as client payments.
+          </p>
+
+          {assignments.length === 0 ? (
+            <p className="mb-3 rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-sm text-slate-400">
+              No freelancers assigned yet.
+            </p>
+          ) : (
+            <div className="mb-4 space-y-3">
+              {assignments.map((a) => {
+                const ff = financeForFreelancer(client, a.freelancer_id);
+                const nextNo = ff.payments.length + 1;
+                const installmentLabel =
+                  nextNo === 1
+                    ? "First Payment"
+                    : nextNo === 2
+                    ? "Second Payment"
+                    : nextNo === 3
+                    ? "Third Payment"
+                    : `Payment ${nextNo}`;
+                return (
+                  <div
+                    key={a.id}
+                    className="rounded-lg border border-slate-200 p-3"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="min-w-[8rem] flex-1 text-sm font-medium text-slate-800">
+                        {a.freelancer?.name ?? "Freelancer"}
+                      </span>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={feeEdits[a.id] ?? String(a.fee)}
+                        onChange={(e) =>
+                          setFeeEdits({ ...feeEdits, [a.id]: e.target.value })
+                        }
+                        className="w-28"
+                        title="Total fee"
+                      />
+                      <Button
+                        variant="ghost"
+                        onClick={() =>
+                          run(() =>
+                            updateClientFreelancerFee(
+                              a.id,
+                              Number(feeEdits[a.id] ?? a.fee) || 0
+                            )
+                          )
+                        }
+                        disabled={busy || a.id.startsWith("legacy-")}
+                        className="!px-2 !text-xs"
+                      >
+                        Save fee
+                      </Button>
+                      <button
+                        onClick={() =>
+                          run(() => removeClientFreelancer(a.id))
+                        }
+                        disabled={busy || a.id.startsWith("legacy-")}
+                        className="rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-400">
+                      Installments received {formatMoney(ff.paid)} · owed{" "}
+                      {formatMoney(ff.outstanding)}
+                    </p>
+
+                    <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+                      {ff.payments.length === 0 && (
+                        <p className="text-xs text-slate-400">
+                          No payment installments yet.
+                        </p>
+                      )}
+                      {ff.payments.map((p) => (
+                        <div
+                          key={p.id}
+                          className="flex flex-wrap items-center gap-2"
+                        >
+                          <span className="w-28 text-sm font-medium text-slate-700">
+                            {p.label}
+                          </span>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={fpAmounts[p.id] ?? String(p.amount)}
+                            onChange={(e) =>
+                              setFpAmounts({
+                                ...fpAmounts,
+                                [p.id]: e.target.value,
+                              })
+                            }
+                            className="w-28"
+                          />
+                          <Button
+                            variant="ghost"
+                            onClick={() =>
+                              run(() =>
+                                updateFreelancerPaymentAmount(
+                                  p.id,
+                                  Number(fpAmounts[p.id] ?? p.amount) || 0
+                                )
+                              )
+                            }
+                            disabled={busy}
+                            className="!px-2 !text-xs"
+                          >
+                            Save
+                          </Button>
+                          <div className="ml-auto flex items-center gap-2">
+                            {p.is_paid ? (
+                              <span className="text-xs text-emerald-600">
+                                Paid {formatDateTime(p.paid_at)}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-slate-400">
+                                Unpaid
+                              </span>
+                            )}
+                            <Button
+                              variant={p.is_paid ? "secondary" : "success"}
+                              onClick={() =>
+                                run(() =>
+                                  setFreelancerPaymentPaid(p.id, !p.is_paid)
+                                )
+                              }
+                              disabled={busy}
+                              className="!py-1.5 !text-xs"
+                            >
+                              {p.is_paid ? "Mark unpaid" : "Mark paid"}
+                            </Button>
+                            <button
+                              onClick={() =>
+                                run(() => deleteFreelancerPayment(p.id))
+                              }
+                              disabled={busy}
+                              className="rounded-md px-1.5 py-1 text-xs text-red-600 hover:bg-red-50"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                      <Button
+                        variant="ghost"
+                        onClick={() =>
+                          run(() =>
+                            addFreelancerPayment(
+                              client.id,
+                              a.freelancer_id,
+                              installmentLabel,
+                              0,
+                              nextNo
+                            )
+                          )
+                        }
+                        disabled={busy}
+                        className="!px-2 !text-xs"
+                      >
+                        + Add installment
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="rounded-lg border border-dashed border-slate-300 p-3">
+            <p className="mb-2 text-sm font-medium text-slate-700">
+              Add freelancer
+            </p>
             <Field label="Freelancer">
               <Select
-                value={freelancerId}
-                onChange={(e) => setFreelancerId(e.target.value)}
+                value={addFreelancerId}
+                onChange={(e) => setAddFreelancerId(e.target.value)}
               >
-                <option value="">— Unassigned —</option>
-                {freelancers.map((f) => (
+                <option value="">— Choose —</option>
+                {available.map((f) => (
                   <option key={f.id} value={f.id}>
                     {f.name}
                   </option>
                 ))}
               </Select>
             </Field>
-            <Field label="Freelancer payment (USD)">
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={freelancerPay}
-                onChange={(e) => setFreelancerPay(e.target.value)}
-              />
-            </Field>
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-3">
-            <Button variant="secondary" onClick={saveFreelancer} disabled={busy}>
-              Save assignment
-            </Button>
-            {client.freelancer_id && (
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <Field label="First payment">
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={addFirst}
+                  onChange={(e) => setAddFirst(e.target.value)}
+                  placeholder="0.00"
+                />
+              </Field>
+              <Field label="Second payment">
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={addSecond}
+                  onChange={(e) => setAddSecond(e.target.value)}
+                  placeholder="0.00"
+                />
+              </Field>
+              <Field label="Third payment">
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={addThird}
+                  onChange={(e) => setAddThird(e.target.value)}
+                  placeholder="0.00"
+                />
+              </Field>
+            </div>
+            <div className="mt-3 flex items-center justify-between gap-2">
               <span className="text-xs text-slate-400">
-                Manage payments in the freelancer&apos;s profile →
-                Freelancers.
+                Fee total: {formatMoney(addFeeTotal)}
               </span>
-            )}
+              <Button
+                variant="secondary"
+                onClick={addAssignment}
+                disabled={busy || !addFreelancerId}
+              >
+                + Add freelancer
+              </Button>
+            </div>
           </div>
         </div>
 
-        {/* Profit + delete */}
         <div className="flex items-center justify-between border-t border-slate-100 pt-4">
           <div className="text-sm">
             <span className="text-slate-400">Project profit: </span>
             <span className="font-semibold text-slate-900">
               {formatMoney(fin.profit)}
+            </span>
+            <span className="ml-2 text-xs text-slate-400">
+              (fees total {formatMoney(fin.freelancerPayment)})
             </span>
           </div>
           <Button variant="danger" onClick={remove} disabled={busy}>
