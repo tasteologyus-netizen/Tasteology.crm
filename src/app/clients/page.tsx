@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { SetupBanner } from "@/components/SetupBanner";
 import {
@@ -17,6 +17,7 @@ import { formatDateTime, formatMoney } from "@/lib/format";
 import {
   clientAssignments,
   financeForFreelancer,
+  freelancerDisplayNames,
   projectFinance,
 } from "@/lib/finance";
 import {
@@ -41,6 +42,7 @@ export default function ClientsPage() {
   const [freelancers, setFreelancers] = useState<Freelancer[]>([]);
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState<ClientWithRelations | null>(null);
+  const [query, setQuery] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -58,6 +60,26 @@ export default function ClientsPage() {
     load();
   }, [load]);
 
+  const filteredClients = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return clients;
+    return clients.filter((c) => {
+      const names = freelancerDisplayNames(c);
+      const hay = [
+        c.full_name,
+        c.email,
+        c.phone,
+        c.project_brief,
+        c.zoom_link,
+        names,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [clients, query]);
+
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <SetupBanner />
@@ -66,6 +88,37 @@ export default function ClientsPage() {
         subtitle="Signed projects. Track payments and freelancer assignment."
       />
 
+      <div className="mb-4">
+        <div className="relative">
+          <svg
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search clients by name, email, phone, freelancer…"
+            className="pl-9"
+            aria-label="Search clients"
+          />
+        </div>
+        {query.trim() && (
+          <p className="mt-1.5 text-xs text-slate-400">
+            Showing {filteredClients.length} of {clients.length} clients
+          </p>
+        )}
+      </div>
+
       {loading ? (
         <div className="p-10 text-center text-sm text-slate-400">Loading…</div>
       ) : clients.length === 0 ? (
@@ -73,9 +126,19 @@ export default function ClientsPage() {
           title="No clients yet"
           description="When you mark a lead as Won, it becomes a client here."
         />
+      ) : filteredClients.length === 0 ? (
+        <EmptyState
+          title="No matching clients"
+          description={`Nothing matched “${query.trim()}”. Try a different name, email, or freelancer.`}
+          action={
+            <Button variant="secondary" onClick={() => setQuery("")}>
+              Clear search
+            </Button>
+          }
+        />
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {clients.map((client) => {
+          {filteredClients.map((client) => {
             const fin = projectFinance(client);
             const assignments = clientAssignments(client);
             const pct =

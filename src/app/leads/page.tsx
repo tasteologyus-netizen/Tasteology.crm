@@ -72,6 +72,7 @@ export default function LeadsPage() {
 
   const [convertLead, setConvertLead] = useState<Lead | null>(null);
   const [bookLead, setBookLead] = useState<Lead | null>(null);
+  const [query, setQuery] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -167,6 +168,26 @@ export default function LeadsPage() {
     [leads]
   );
 
+  const filteredLeads = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return openLeads;
+    return openLeads.filter((l) => {
+      const hay = [
+        l.full_name,
+        l.email,
+        l.phone,
+        l.status,
+        l.source,
+        l.project_brief,
+        l.zoom_link,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [openLeads, query]);
+
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <SetupBanner />
@@ -176,6 +197,36 @@ export default function LeadsPage() {
         action={<Button onClick={openNew}>+ Add lead</Button>}
       />
 
+      <div className="mb-4">
+        <div className="relative">
+          <svg
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search leads by name, email, phone, status…"
+            className="pl-9"
+            aria-label="Search leads"
+          />
+        </div>
+        {query.trim() && (
+          <p className="mt-1.5 text-xs text-slate-400">
+            Showing {filteredLeads.length} of {openLeads.length} leads
+          </p>
+        )}
+      </div>
       {error && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
@@ -193,6 +244,18 @@ export default function LeadsPage() {
               action={<Button onClick={openNew}>+ Add lead</Button>}
             />
           </div>
+        ) : filteredLeads.length === 0 ? (
+          <div className="p-6">
+            <EmptyState
+              title="No matching leads"
+              description={`Nothing matched “${query.trim()}”. Try a different name, email, or phone.`}
+              action={
+                <Button variant="secondary" onClick={() => setQuery("")}>
+                  Clear search
+                </Button>
+              }
+            />
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -207,7 +270,7 @@ export default function LeadsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {openLeads.map((lead) => (
+                {filteredLeads.map((lead) => (
                   <tr key={lead.id} className="hover:bg-slate-50/60">
                     <td className="px-5 py-3">
                       <div className="font-medium text-slate-900">
