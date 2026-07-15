@@ -14,10 +14,13 @@ import {
   Select,
   Textarea,
 } from "@/components/ui";
-import { formatDateTime } from "@/lib/format";
+import { formatDate, formatDateTime } from "@/lib/format";
 import {
   downloadIcs,
   googleCalendarUrl,
+  isoToDateInput,
+  dateInputToIso,
+  todayDateInput,
   isoToLocalInput,
   localInputToIso,
   type MeetingEvent,
@@ -53,6 +56,7 @@ const emptyForm: LeadInput = {
   source: "manual",
   status: "new",
   meeting_at: null,
+  created_at: null,
 };
 
 export default function LeadsPage() {
@@ -89,7 +93,10 @@ export default function LeadsPage() {
 
   const openNew = () => {
     setEditing(null);
-    setForm(emptyForm);
+    setForm({
+      ...emptyForm,
+      created_at: dateInputToIso(todayDateInput()),
+    });
     setFormOpen(true);
   };
 
@@ -104,6 +111,7 @@ export default function LeadsPage() {
       source: lead.source,
       status: lead.status,
       meeting_at: lead.meeting_at,
+      created_at: lead.created_at,
     });
     setFormOpen(true);
   };
@@ -230,7 +238,7 @@ export default function LeadsPage() {
                       <Badge value={lead.source} />
                     </td>
                     <td className="px-5 py-3 text-slate-500">
-                      {formatDateTime(lead.created_at)}
+                      {formatDate(lead.created_at)}
                     </td>
                     <td className="px-5 py-3">
                       <Select
@@ -382,6 +390,22 @@ export default function LeadsPage() {
                   </option>
                 ))}
               </Select>
+            </Field>
+            <Field
+              label="Lead date"
+              hint="Day / Month / Year — you can pick older dates for past leads"
+            >
+              <Input
+                type="date"
+                value={isoToDateInput(form.created_at)}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    created_at: dateInputToIso(e.target.value, form.created_at),
+                  })
+                }
+                required
+              />
             </Field>
             <Field label="Meeting date & time" hint="Used for the calendar & 1-hour reminder">
               <Input

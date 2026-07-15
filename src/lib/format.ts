@@ -7,28 +7,34 @@ export function formatMoney(value: number | null | undefined): string {
   }).format(n);
 }
 
-export function formatDateTime(value: string | null | undefined): string {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (isNaN(d.getTime())) return "—";
-  return d.toLocaleString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
+/** Display as Day Month Year, e.g. "15 Jul 2026". */
 export function formatDate(value: string | null | undefined): string {
   if (!value) return "—";
   const d = new Date(value);
   if (isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
+  return d.toLocaleDateString("en-GB", {
     day: "numeric",
+    month: "short",
+    year: "numeric",
   });
+}
+
+/** Display as Day Month Year + time, e.g. "15 Jul 2026, 3:30 pm". */
+export function formatDateTime(value: string | null | undefined): string {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return "—";
+  const date = d.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+  const time = d.toLocaleTimeString("en-GB", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+  return `${date}, ${time}`;
 }
 
 export function timeAgo(value: string | null | undefined): string {

@@ -95,3 +95,43 @@ export function localInputToIso(value: string): string | null {
   const d = new Date(value);
   return isNaN(d.getTime()) ? null : d.toISOString();
 }
+
+/** ISO -> YYYY-MM-DD for <input type="date"> (local calendar day). */
+export function isoToDateInput(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const tzOffset = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - tzOffset).toISOString().slice(0, 10);
+}
+
+/**
+ * YYYY-MM-DD -> ISO timestamptz.
+ * Keeps existing time-of-day when updating; otherwise uses local noon
+ * so the chosen calendar day doesn't flip across timezones.
+ */
+export function dateInputToIso(
+  value: string,
+  keepTimeFrom?: string | null
+): string | null {
+  if (!value) return null;
+  const [y, m, day] = value.split("-").map(Number);
+  if (!y || !m || !day) return null;
+
+  const d = new Date();
+  if (keepTimeFrom) {
+    const existing = new Date(keepTimeFrom);
+    if (!isNaN(existing.getTime())) {
+      d.setTime(existing.getTime());
+    }
+  } else {
+    d.setHours(12, 0, 0, 0);
+  }
+  d.setFullYear(y, m - 1, day);
+  return d.toISOString();
+}
+
+/** Today's date as YYYY-MM-DD (local). */
+export function todayDateInput(): string {
+  return isoToDateInput(new Date().toISOString());
+}

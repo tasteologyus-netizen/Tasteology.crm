@@ -20,6 +20,10 @@ interface AuthContextValue {
     email: string,
     password: string
   ) => Promise<{ error: string | null; needsConfirmation: boolean }>;
+  changePassword: (
+    currentPassword: string,
+    newPassword: string
+  ) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -77,6 +81,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             !error && data.user && !data.session
           ),
         };
+      },
+      changePassword: async (currentPassword, newPassword) => {
+        const email = session?.user?.email;
+        if (!email) return { error: "You must be signed in." };
+        if (newPassword.length < 8) {
+          return { error: "New password must be at least 8 characters." };
+        }
+
+        // Re-authenticate with the current password before updating.
+        const { error: verifyError } = await supabase.auth.signInWithPassword({
+          email,
+          password: currentPassword,
+        });
+        if (verifyError) {
+          return { error: "Current password is incorrect." };
+        }
+
+        const { error } = await supabase.auth.updateUser({
+          password: newPassword,
+        });
+        return { error: error?.message ?? null };
       },
       signOut: async () => {
         await supabase.auth.signOut();

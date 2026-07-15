@@ -121,15 +121,16 @@ end $$;
 -- ---------------------------------------------------------------------------
 -- Table privileges
 -- RLS decides which ROWS are visible, but the role still needs table-level
--- GRANTs or Postgres raises "permission denied for table". Give signed-in
--- users full access; the anon role only needs schema usage.
+-- GRANTs or Postgres raises "permission denied for table".
+-- - authenticated : signed-in CRM users in the dashboard
+-- - service_role  : server APIs using SUPABASE_SECRET_KEY (bypasses RLS)
 -- ---------------------------------------------------------------------------
-grant usage on schema public to anon, authenticated;
-grant select, insert, update, delete on all tables in schema public to authenticated;
-grant usage, select on all sequences in schema public to authenticated;
+grant usage on schema public to anon, authenticated, service_role;
+grant select, insert, update, delete on all tables in schema public to authenticated, service_role;
+grant usage, select on all sequences in schema public to authenticated, service_role;
 
 -- Apply the same defaults to any tables/sequences created later.
 alter default privileges in schema public
-  grant select, insert, update, delete on tables to authenticated;
+  grant select, insert, update, delete on tables to authenticated, service_role;
 alter default privileges in schema public
-  grant usage, select on sequences to authenticated;
+  grant usage, select on sequences to authenticated, service_role;

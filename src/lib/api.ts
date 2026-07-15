@@ -31,6 +31,7 @@ export interface LeadInput {
   source: string;
   status: LeadStatus;
   meeting_at?: string | null;
+  created_at?: string | null;
 }
 
 export async function createLead(input: LeadInput): Promise<Lead> {

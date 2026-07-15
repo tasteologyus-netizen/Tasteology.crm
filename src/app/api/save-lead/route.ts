@@ -56,8 +56,13 @@ export async function POST(request: Request) {
     }
 
     if (!isSupabaseAdminConfigured) {
-      console.error("[save-lead] Supabase admin not configured.");
-      return NextResponse.json({ success: false }, { status: 500 });
+      console.error(
+        "[save-lead] Supabase admin not configured. Set SUPABASE_SECRET_KEY (or SUPABASE_SERVICE_ROLE_KEY) in Vercel env."
+      );
+      return NextResponse.json(
+        { success: false, error: "server_misconfigured" },
+        { status: 500 }
+      );
     }
 
     const supabase = getSupabaseAdmin();

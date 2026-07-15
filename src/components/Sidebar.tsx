@@ -1,9 +1,11 @@
 "use client";
 
+import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
+import { Button, Field, Input, Modal } from "@/components/ui";
 
 const nav = [
   { href: "/", label: "Dashboard", short: "Home", icon: "M3 12l9-9 9 9M5 10v10h5v-6h4v6h5V10" },
@@ -69,10 +71,148 @@ function SignOutIcon() {
   );
 }
 
+function KeyIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+    </svg>
+  );
+}
+
+function ChangePasswordModal({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  const { changePassword } = useAuth();
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const reset = () => {
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setError(null);
+    setSuccess(false);
+    setSaving(false);
+  };
+
+  const handleClose = () => {
+    reset();
+    onClose();
+  };
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(false);
+
+    if (newPassword !== confirmPassword) {
+      setError("New passwords do not match.");
+      return;
+    }
+    if (newPassword.length < 8) {
+      setError("New password must be at least 8 characters.");
+      return;
+    }
+    if (newPassword === currentPassword) {
+      setError("New password must be different from the current one.");
+      return;
+    }
+
+    setSaving(true);
+    const { error: err } = await changePassword(currentPassword, newPassword);
+    setSaving(false);
+
+    if (err) {
+      setError(err);
+      return;
+    }
+
+    setSuccess(true);
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+  };
+
+  return (
+    <Modal open={open} onClose={handleClose} title="Change password">
+      <form onSubmit={submit} className="space-y-4">
+        <Field label="Current password">
+          <Input
+            type="password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            autoComplete="current-password"
+            required
+            autoFocus
+          />
+        </Field>
+        <Field label="New password" hint="At least 8 characters">
+          <Input
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            autoComplete="new-password"
+            required
+            minLength={8}
+          />
+        </Field>
+        <Field label="Confirm new password">
+          <Input
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            autoComplete="new-password"
+            required
+            minLength={8}
+          />
+        </Field>
+
+        {error && (
+          <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {error}
+          </p>
+        )}
+        {success && (
+          <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+            Password updated successfully.
+          </p>
+        )}
+
+        <div className="flex justify-end gap-2 pt-1">
+          <Button type="button" variant="secondary" onClick={handleClose}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={saving}>
+            {saving ? "Saving…" : "Update password"}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 export function Sidebar() {
   const pathname = usePathname();
   const current = nav.find((n) => isActive(pathname, n.href));
   const { user, signOut } = useAuth();
+  const [passwordOpen, setPasswordOpen] = useState(false);
 
   return (
     <>
@@ -107,6 +247,13 @@ export function Sidebar() {
                 {user.email}
               </p>
               <button
+                onClick={() => setPasswordOpen(true)}
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
+              >
+                <KeyIcon />
+                Reset password
+              </button>
+              <button
                 onClick={() => signOut()}
                 className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
               >
@@ -128,14 +275,24 @@ export function Sidebar() {
             </span>
           )}
           {isSupabaseConfigured && user && (
-            <button
-              onClick={() => signOut()}
-              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-              aria-label="Sign out"
-              title={`Sign out (${user.email ?? ""})`}
-            >
-              <SignOutIcon />
-            </button>
+            <>
+              <button
+                onClick={() => setPasswordOpen(true)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Reset password"
+                title="Reset password"
+              >
+                <KeyIcon />
+              </button>
+              <button
+                onClick={() => signOut()}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Sign out"
+                title={`Sign out (${user.email ?? ""})`}
+              >
+                <SignOutIcon />
+              </button>
+            </>
           )}
         </div>
       </header>
@@ -158,6 +315,11 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      <ChangePasswordModal
+        open={passwordOpen}
+        onClose={() => setPasswordOpen(false)}
+      />
     </>
   );
 }
